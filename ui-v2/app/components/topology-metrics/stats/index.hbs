@@ -1,6 +1,7 @@
 <DataSource
   @src={{uri nspace dc 'metrics' @endpoint @service @protocol}}
   @onchange={{action 'statsUpdate'}}
+  @onerror={{action (mut error) value="error"}}
 />
 
 <div class="stats">
@@ -19,6 +20,10 @@
       <span>No Metrics Available</span>
     {{/each}}
   {{else}}
-    <span class="loader">Loading Metrics</span>
+    {{#if error}}
+      <span class="error">Unable to load Metrics</span>
+    {{else}}
+      <span class="loader">Loading Metrics</span>
+    {{/if}}
   {{/if}}
 </div>

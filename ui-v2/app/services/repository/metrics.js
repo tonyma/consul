@@ -9,8 +9,10 @@ const meta = {
   interval: env('CONSUL_METRICS_POLL_INTERVAL') || 10000,
 };
 
+/*eslint no-console: "off"*/
 export default RepositoryService.extend({
   cfg: service('ui-config'),
+  error: null,
 
   init: function() {
     this._super(...arguments);
@@ -21,10 +23,19 @@ export default RepositoryService.extend({
     opts.metrics_proxy_enabled = uiCfg.metrics_proxy_enabled;
     // Inject the base app URL
     const provider = uiCfg.metrics_provider || 'prometheus';
-    this.provider = window.consul.getMetricsProvider(provider, opts);
+
+    try {
+      this.provider = window.consul.getMetricsProvider(provider, opts);
+    } catch(e) {
+      this.error = e;
+    }
   },
 
   findServiceSummary: function(protocol, slug, dc, nspace, configuration = {}) {
+    if (this.error) {
+      // Error initializing the provider just return an error
+      return Promise.reject(`metrics provider not initialized: ${this.error}`);
+    }
     const promises = [
       // TODO: support namespaces in providers
       this.provider.serviceRecentSummarySeries(slug, protocol, {}),
@@ -33,13 +44,17 @@ export default RepositoryService.extend({
     return Promise.all(promises).then(function(results) {
       return {
         meta: meta,
-        series: results[0].series,
+        series: results[0],
         stats: results[1].stats,
       };
     });
   },
 
   findUpstreamSummary: function(slug, dc, nspace, configuration = {}) {
+    if (this.error) {
+      // Error initializing the provider just return an error
+      return Promise.reject(`metrics provider not initialized: ${this.error}`);
+    }
     return this.provider.upstreamRecentSummaryStats(slug, {}).then(function(result) {
       result.meta = meta;
       return result;
@@ -47,6 +62,10 @@ export default RepositoryService.extend({
   },
 
   findDownstreamSummary: function(slug, dc, nspace, configuration = {}) {
+    if (this.error) {
+      // Error initializing the provider just return an error
+      return Promise.reject(`metrics provider not initialized: ${this.error}`);
+    }
     return this.provider.downstreamRecentSummaryStats(slug, {}).then(function(result) {
       result.meta = meta;
       return result;
