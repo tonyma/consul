@@ -3,9 +3,10 @@ package state
 import (
 	"fmt"
 
+	"github.com/hashicorp/go-memdb"
+
 	"github.com/hashicorp/consul/agent/consul/stream"
 	"github.com/hashicorp/consul/proto/pbsubscribe"
-	"github.com/hashicorp/go-memdb"
 )
 
 // ReadTxn is implemented by memdb.Txn to perform read operations.
@@ -19,6 +20,11 @@ type ReadTxn interface {
 type AbortTxn interface {
 	ReadTxn
 	Abort()
+}
+
+// ReadDB is a DB that provides read-only transactions.
+type ReadDB interface {
+	ReadTxn() AbortTxn
 }
 
 // WriteTxn is implemented by memdb.Txn to perform write operations.
@@ -159,6 +165,12 @@ func (tx *txn) Commit() error {
 	return nil
 }
 
+type readDB memdb.MemDB
+
+func (db *readDB) ReadTxn() AbortTxn {
+	return (*memdb.MemDB)(db).Txn(false)
+}
+
 var (
 	topicServiceHealth        = pbsubscribe.Topic_ServiceHealth
 	topicServiceHealthConnect = pbsubscribe.Topic_ServiceHealthConnect
@@ -181,9 +193,9 @@ func processDBChanges(tx ReadTxn, changes Changes) ([]stream.Event, error) {
 	return events, nil
 }
 
-func newSnapshotHandlers(s *Store) stream.SnapshotHandlers {
+func newSnapshotHandlers(db ReadDB) stream.SnapshotHandlers {
 	return stream.SnapshotHandlers{
-		topicServiceHealth:        serviceHealthSnapshot(s, topicServiceHealth),
-		topicServiceHealthConnect: serviceHealthSnapshot(s, topicServiceHealthConnect),
+		topicServiceHealth:        serviceHealthSnapshot(db, topicServiceHealth),
+		topicServiceHealthConnect: serviceHealthSnapshot(db, topicServiceHealthConnect),
 	}
 }
